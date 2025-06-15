@@ -7,3 +7,4 @@ vercel.json
 *.zip
 *.log
 .env
+session/
