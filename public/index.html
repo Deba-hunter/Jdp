@@ -3,6 +3,7 @@
 <head><title>WhatsApp Bot</title></head>
 <body>
   <h2>Login Code</h2>
+  <input id="phone" placeholder="Enter WhatsApp Number (e.g., 919999999999)" />
   <button onclick="getCode()">Get Code</button>
   <pre id="output"></pre>
 
@@ -18,7 +19,8 @@
 
   <script>
     async function getCode() {
-      const res = await fetch('/api');
+      const phone = document.getElementById('phone').value;
+      const res = await fetch('/api?phone=' + phone);
       const data = await res.json();
       document.getElementById('output').textContent = JSON.stringify(data, null, 2);
     }
