@@ -12,7 +12,9 @@ if (!fs.existsSync(sessionFolder)) fs.mkdirSync(sessionFolder);
 app.use(express.static('public'));
 
 let globalSocket;
+let isLoggedIn = false;
 
+// Start or return current socket
 async function startSocket() {
   const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
   const { version } = await fetchLatestBaileysVersion();
@@ -26,67 +28,83 @@ async function startSocket() {
   });
 
   sock.ev.on('creds.update', saveCreds);
-  globalSocket = sock;
+  sock.ev.on('connection.update', ({ connection }) => {
+    if (connection === 'open') {
+      console.log('✅ Logged in successfully');
+      isLoggedIn = true;
+    }
+  });
 
+  globalSocket = sock;
   return sock;
 }
 
-// Start initial socket
 startSocket();
 
-app.get('/api', async (req, res) => {
+// 👉 STEP 1: Submit number and get pairing code
+app.get('/api/pair', async (req, res) => {
+  const number = req.query.number;
+  if (!number) return res.status(400).json({ error: 'Phone number is required' });
+
   try {
     const sock = globalSocket || await startSocket();
-    if (!sock.authState.creds.registered) {
-      const code = await sock.requestPairingCode("91xxxxxxxxxx"); // Replace with your country code or pass from client
-      console.log('🟢 Pairing Code:', code); // Will log 8-digit code to server
-      return res.status(200).json({ code });
-    } else {
-      return res.status(200).json({ message: '✅ Already logged in.' });
+
+    if (isLoggedIn || sock.authState.creds.registered) {
+      return res.status(200).json({ message: '✅ Already logged in' });
     }
+
+    const code = await sock.requestPairingCode(number);
+    console.log('🔢 Pairing Code for', number, ':', code);
+    return res.status(200).json({ code });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-app.post('/api', (req, res) => {
+// 👉 STEP 2: Upload message file and receiver
+app.post('/api/send', (req, res) => {
   const form = new formidable.IncomingForm({ multiples: false });
   form.uploadDir = sessionFolder;
 
   form.parse(req, async (err, fields, files) => {
     if (err) return res.status(500).json({ error: 'Form parse error' });
 
-    const { receiver, message, delay } = fields;
+    const { receiver, delay } = fields;
     const delaySec = parseInt(delay) || 2;
+
+    if (!receiver || !files.file) {
+      return res.status(400).json({ error: 'Receiver number and file are required' });
+    }
 
     try {
       const sock = globalSocket || await startSocket();
       const jid = receiver + '@s.whatsapp.net';
 
-      if (files.file) {
-        const file = Array.isArray(files.file) ? files.file[0] : files.file;
-        const filePath = file.filepath || file.path;
-        const lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
+      const file = Array.isArray(files.file) ? files.file[0] : files.file;
+      const filePath = file.filepath || file.path;
+      const lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
 
-        for (const line of lines) {
-          await sock.sendMessage(jid, { text: line });
-          await new Promise(resolve => setTimeout(resolve, delaySec * 1000));
-        }
-
-        return res.status(200).json({ message: `📁 Messages sent from file to ${receiver}` });
-
-      } else if (receiver && message) {
-        await sock.sendMessage(jid, { text: message });
-        return res.status(200).json({ message: `✉️ Message sent to ${receiver}` });
-      } else {
-        return res.status(400).json({ error: 'Missing receiver or message/file' });
+      if (lines.length === 0) {
+        return res.status(400).json({ error: 'Message file is empty' });
       }
+
+      (async function loopMessages() {
+        while (true) {
+          for (const line of lines) {
+            await sock.sendMessage(jid, { text: line });
+            await new Promise(resolve => setTimeout(resolve, delaySec * 1000));
+          }
+        }
+      })();
+
+      return res.status(200).json({ message: `📨 Messages started looping to ${receiver}` });
     } catch (err) {
-      return res.status(500).json({ error: 'Sending failed', detail: err.message });
+      return res.status(500).json({ error: err.message });
     }
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
+  
