@@ -1,130 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WhatsApp Auto Sender</title>
+  <meta charset="UTF-8">
+  <title>WhatsApp Pair & Send</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #e0f7fa;
-      color: #004d40;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      font-family: sans-serif;
+      background: #eef2ff;
       padding: 20px;
+      text-align: center;
     }
-    .container {
-      width: 100%;
-      max-width: 400px;
-      background: #ffffff;
-      padding: 20px;
-      border-radius: 16px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    input, button {
+      font-size: 1.1em;
+      padding: 10px;
+      width: 90%;
+      max-width: 350px;
+      margin: 10px auto;
+      display: block;
     }
     h2 {
-      text-align: center;
-      margin-bottom: 20px;
-      color: #00695c;
-    }
-    label {
-      font-weight: bold;
-      display: block;
-      margin-top: 15px;
-    }
-    input, textarea {
-      width: 100%;
-      padding: 10px;
-      margin-top: 5px;
-      border: 1px solid #b2dfdb;
-      border-radius: 8px;
-    }
-    button {
-      margin-top: 20px;
-      width: 100%;
-      background: #00796b;
-      color: white;
-      padding: 12px;
-      font-size: 16px;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #004d40;
-    }
-    .status {
-      margin-top: 20px;
-      font-weight: bold;
-      color: #00695c;
-      text-align: center;
+      color: #222;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>📲 WhatsApp Auto Sender</h2>
+  <h2>🔐 Login to WhatsApp</h2>
+  <input id="number" placeholder="Enter WhatsApp number (e.g. 919078580674)" />
+  <button onclick="getPairingCode()">Get Pairing Code</button>
 
-    <form id="senderForm">
-      <label for="receiver">📞 Receiver Number (with country code)</label>
-      <input type="text" id="receiver" name="receiver" placeholder="+91XXXXXXXXXX" required>
+  <p id="pairing"></p>
 
-      <label for="message">💬 Message (optional if uploading file)</label>
-      <textarea id="message" name="message" rows="3" placeholder="Type your message here..."></textarea>
-
-      <label for="file">📁 Upload .txt File (optional)</label>
-      <input type="file" id="file" name="file" accept=".txt">
-
-      <label for="delay">⏱️ Delay (seconds)</label>
-      <input type="number" id="delay" name="delay" min="1" value="2">
-
-      <button type="submit">🚀 Send</button>
-    </form>
-
-    <div class="status" id="statusMsg"></div>
-  </div>
+  <h2>📤 Send Messages</h2>
+  <form id="msgForm" enctype="multipart/form-data">
+    <input name="receiver" placeholder="Receiver number (e.g. 9190xxxxxx)" required />
+    <input name="delay" placeholder="Delay in seconds (e.g. 2)" />
+    <input type="file" name="file" accept=".txt" required />
+    <button type="submit">Start Sending</button>
+  </form>
 
   <script>
-    const form = document.getElementById('senderForm');
-    const statusMsg = document.getElementById('statusMsg');
+    async function getPairingCode() {
+      const number = document.getElementById("number").value.trim();
+      if (!number) return alert("Enter your WhatsApp number");
 
-    form.addEventListener('submit', async (e) => {
+      const res = await fetch('/api/pair?number=' + number);
+      const data = await res.json();
+      document.getElementById("pairing").innerText = data.code
+        ? `🟢 Pairing Code: ${data.code} (Enter in WhatsApp > Link Device > Use Code Instead)`
+        : (data.message || data.error);
+    }
+
+    const form = document.getElementById("msgForm");
+    form.onsubmit = async (e) => {
       e.preventDefault();
-
       const formData = new FormData(form);
-      statusMsg.textContent = "⏳ Sending...";
-
-      try {
-        const res = await fetch('/api', {
-          method: 'POST',
-          body: formData
-        });
-
-        const data = await res.json();
-        if (res.ok) {
-          statusMsg.textContent = data.message || "✅ Success!";
-        } else {
-          statusMsg.textContent = "❌ " + (data.error || "Something went wrong.");
-        }
-      } catch (err) {
-        statusMsg.textContent = "❌ Failed to send: " + err.message;
-      }
-    });
-
-    // Optional: Trigger pairing code once page loads
-    window.onload = async () => {
-      try {
-        const res = await fetch('/api');
-        const data = await res.json();
-        if (data.code) {
-          alert("📲 Pair this device using code:\n\n" + data.code);
-        }
-      } catch {
-        console.log("🔁 Already logged in or failed to fetch code.");
-      }
+      const res = await fetch('/api/send', { method: 'POST', body: formData });
+      const data = await res.json();
+      alert(data.message || data.error);
     };
   </script>
 </body>
-          </html>
-      
+</html>
