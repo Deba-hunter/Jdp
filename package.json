@@ -1,15 +1,14 @@
 {
-  "name": "whatsapp-auto-sender",
+  "name": "whatsapp-bot",
   "version": "1.0.0",
-  "description": "WhatsApp Auto Message Sender using Baileys and Express",
+  "description": "A WhatsApp bot using Baileys",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js",
-    "build": "echo 'No build step needed'"
+    "start": "node app.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.18",
-    "express": "^4.18.4",
-    "formidable": "^2.1.1"
+    "@whiskeysockets/baileys": "^6.5.0",
+    "express": "^4.18.2",
+    "formidable": "^3.5.1"
   }
 }
