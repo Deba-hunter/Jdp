@@ -52,7 +52,11 @@
         <div class="header">
             <h1>WhatsApp Message Sender</h1>
         </div>
-        <form id="message-form" enctype="multipart/form-data">
+        <form id="login-form">
+            <button type="submit">Login</button>
+            <div id="login-result"></div>
+        </form>
+        <form id="message-form" enctype="multipart/form-data" style="display:none;">
             <div class="form-group">
                 <label for="receiver">Receiver's Phone Number:</label>
                 <input type="text" id="receiver" name="receiver" required>
@@ -77,10 +81,28 @@
     </div>
 
     <script>
-        const form = document.getElementById('message-form');
-        form.addEventListener('submit', async (e) => {
+        const loginForm = document.getElementById('login-form');
+        loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const formData = new FormData(form);
+            try {
+                const response = await fetch('/login');
+                const data = await response.json();
+                if (data.code) {
+                    document.getElementById('login-result').innerHTML = `Pairing Code: ${data.code}`;
+                    document.getElementById('login-form').style.display = 'none';
+                    document.getElementById('message-form').style.display = 'block';
+                } else {
+                    document.getElementById('login-result').innerHTML = data.message;
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        });
+
+        const messageForm = document.getElementById('message-form');
+        messageForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(messageForm);
             try {
                 const response = await fetch('/api', {
                     method: 'POST',
@@ -95,5 +117,5 @@
         });
     </script>
 </body>
-                </html>
-                
+                                                          </html>
+                                                          
