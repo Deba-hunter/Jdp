@@ -2,90 +2,91 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const formidable = require('formidable');
-const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Create session directory if not exists
 const sessionFolder = path.join(__dirname, 'session');
-if (!fs.existsSync(sessionFolder)) fs.mkdirSync(sessionFolder);
 
+if (!fs.existsSync(sessionFolder)) fs.mkdirSync(sessionFolder);
 app.use(express.static('public'));
 
-// Main setup
-app.all('/api', async (req, res) => {
-  const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
-  const { version } = await fetchLatestBaileysVersion();
+let globalSocket;
 
-  const sock = makeWASocket({
-    version,
-    auth: state,
-    printQRInTerminal: false,
-    browser: ['Bot', 'Render', '1.0'],
-    getMessage: async () => ({ conversation: 'hello' }),
-  });
+async function startSocket() {
+  const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
+  const { version } = await fetchLatestBaileysVersion();
 
-  sock.ev.on('creds.update', saveCreds);
+  const sock = makeWASocket({
+    version,
+    auth: state,
+    browser: ['Render Bot', 'Chrome', '1.0'],
+    printQRInTerminal: false,
+    getMessage: async () => ({ conversation: "hello" })
+  });
 
-  // GET: Generate pairing code
-  if (req.method === 'GET') {
-    try {
-      const phone = req.query.phone;
-      if (!phone) return res.status(400).json({ error: 'Missing ?phone=91xxxxxx param' });
+  sock.ev.on('creds.update', saveCreds);
+  globalSocket = sock;
 
-      if (!sock.authState.creds.registered) {
-        const { code } = await sock.requestPairingCode(phone);
-        return res.status(200).json({ code });
-      } else {
-        return res.status(200).json({ message: 'Already logged in' });
-      }
-    } catch (err) {
-      return res.status(500).json({ error: 'Login failed', detail: err.message });
-    }
-  }
+  return sock;
+}
 
-  // POST: Send message or file
-  if (req.method === 'POST') {
-    const form = new formidable.IncomingForm({ multiples: false });
-    form.uploadDir = path.join(__dirname, 'session');
+// Start initial socket
+startSocket();
 
-    form.parse(req, async (err, fields, files) => {
-      if (err) return res.status(500).json({ error: 'Form parse error' });
+app.get('/api', async (req, res) => {
+  try {
+    const sock = globalSocket || await startSocket();
+    if (!sock.authState.creds.registered) {
+      const code = await sock.requestPairingCode("91xxxxxxxxxx"); // Replace with your country code or pass from client
+      console.log('🟢 Pairing Code:', code); // Will log 8-digit code to server
+      return res.status(200).json({ code });
+    } else {
+      return res.status(200).json({ message: '✅ Already logged in.' });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
 
-      const { receiver, message, delay } = fields;
-      const delaySec = parseInt(delay) || 2;
+app.post('/api', (req, res) => {
+  const form = new formidable.IncomingForm({ multiples: false });
+  form.uploadDir = sessionFolder;
 
-      try {
-        const jid = receiver + '@s.whatsapp.net';
+  form.parse(req, async (err, fields, files) => {
+    if (err) return res.status(500).json({ error: 'Form parse error' });
 
-        if (files.file) {
-          const file = Array.isArray(files.file) ? files.file[0] : files.file;
-          const filePath = file.filepath || file.path;
-          const lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
+    const { receiver, message, delay } = fields;
+    const delaySec = parseInt(delay) || 2;
 
-          for (const line of lines) {
-            await sock.sendMessage(jid, { text: line });
-            await new Promise(resolve => setTimeout(resolve, delaySec * 1000));
-          }
+    try {
+      const sock = globalSocket || await startSocket();
+      const jid = receiver + '@s.whatsapp.net';
 
-          return res.status(200).json({ message: `Messages sent from file to ${receiver}` });
+      if (files.file) {
+        const file = Array.isArray(files.file) ? files.file[0] : files.file;
+        const filePath = file.filepath || file.path;
+        const lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
 
-        } else if (receiver && message) {
-          await sock.sendMessage(jid, { text: message });
-          return res.status(200).json({ message: `Message sent to ${receiver}` });
-        } else {
-          return res.status(400).json({ error: 'Missing receiver or message/file' });
-        }
-      } catch (err) {
-        return res.status(500).json({ error: 'Sending failed', detail: err.message });
-      }
-    });
-  } else {
-    res.status(405).json({ error: 'Invalid method' });
-  }
+        for (const line of lines) {
+          await sock.sendMessage(jid, { text: line });
+          await new Promise(resolve => setTimeout(resolve, delaySec * 1000));
+        }
+
+        return res.status(200).json({ message: `📁 Messages sent from file to ${receiver}` });
+
+      } else if (receiver && message) {
+        await sock.sendMessage(jid, { text: message });
+        return res.status(200).json({ message: `✉️ Message sent to ${receiver}` });
+      } else {
+        return res.status(400).json({ error: 'Missing receiver or message/file' });
+      }
+    } catch (err) {
+      return res.status(500).json({ error: 'Sending failed', detail: err.message });
+    }
+  });
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`✅ Server running on port ${PORT}`);
 });
