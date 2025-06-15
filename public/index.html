@@ -1,37 +1,85 @@
 <!DOCTYPE html>
 <html>
-<head><title>WhatsApp Bot</title></head>
+<head>
+  <title>WhatsApp Auto Sender</title>
+  <style>
+    body {
+      font-family: Arial;
+      padding: 30px;
+      max-width: 500px;
+      margin: auto;
+      background: #f5f5f5;
+    }
+    h2 {
+      color: #333;
+    }
+    input, textarea, button {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+    }
+    label {
+      font-weight: bold;
+    }
+    #output {
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
 <body>
-  <h2>Login Code</h2>
-  <input id="phone" placeholder="Enter WhatsApp Number (e.g., 919999999999)" />
-  <button onclick="getCode()">Get Code</button>
-  <pre id="output"></pre>
+  <h2>🔐 WhatsApp Pair Code Login</h2>
+  <label>Phone Number (with country code)</label>
+  <input type="text" id="phone" placeholder="e.g., 91XXXXXXXXXX" />
+  <button onclick="getCode()">Get Pair Code</button>
+  <pre id="pairOutput"></pre>
 
-  <hr>
-  <h2>Send Message / File</h2>
-  <form id="msgForm" enctype="multipart/form-data">
-    <input name="receiver" placeholder="919999999999" required><br>
-    <input name="message" placeholder="Text message"><br>
-    <input type="file" name="file"><br>
-    <input name="delay" placeholder="Delay (sec)" value="2"><br>
-    <button>Send</button>
+  <hr />
+
+  <h2>📤 Send Message or File</h2>
+  <form id="sendForm">
+    <label>Receiver Number</label>
+    <input type="text" name="receiver" placeholder="e.g., 91XXXXXXXXXX" required />
+
+    <label>Delay Between Messages (seconds)</label>
+    <input type="number" name="delay" value="2" />
+
+    <label>Message (if no file uploaded)</label>
+    <textarea name="message" placeholder="Write your message..."></textarea>
+
+    <label>Upload Message File (optional)</label>
+    <input type="file" name="file" accept=".txt" />
+
+    <button type="submit">Send</button>
   </form>
 
+  <div id="output"></div>
+
   <script>
-    async function getCode() {
+    function getCode() {
       const phone = document.getElementById('phone').value;
-      const res = await fetch('/api?phone=' + phone);
-      const data = await res.json();
-      document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+      if (!phone) return alert("Please enter a phone number.");
+      fetch(`/api?phone=${phone}`)
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById('pairOutput').textContent = JSON.stringify(data, null, 2);
+        });
     }
 
-    document.getElementById('msgForm').onsubmit = async (e) => {
+    document.getElementById('sendForm').addEventListener('submit', function (e) {
       e.preventDefault();
-      const formData = new FormData(e.target);
-      const res = await fetch('/api', { method: 'POST', body: formData });
-      const data = await res.json();
-      alert(JSON.stringify(data, null, 2));
-    }
+      const formData = new FormData(this);
+      fetch('/api', {
+        method: 'POST',
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+      });
+    });
   </script>
 </body>
 </html>
