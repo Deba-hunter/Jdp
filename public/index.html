@@ -1,102 +1,94 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WhatsApp Auto Sender</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f2f2f2;
-      margin: 0;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
-    h2 {
-      color: #075E54;
-    }
-    form {
-      background: #fff;
-      padding: 20px;
-      width: 100%;
-      max-width: 400px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-      border-radius: 10px;
-    }
-    input, textarea, button {
-      width: 100%;
-      margin-top: 10px;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 16px;
-    }
-    button {
-      background-color: #25D366;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #128C7E;
-    }
-    .code-box {
-      background: #e8f5e9;
-      padding: 10px;
-      margin-top: 10px;
-      text-align: center;
-      font-size: 18px;
-      border: 1px dashed #25D366;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Message Sender</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f2;
+        }
+        .container {
+            width: 80%;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 10px;
+        }
+        .form-group input[type="text"], .form-group input[type="file"], .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .form-group input[type="submit"] {
+            background-color: #4CAF50;
+            color: #fff;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .form-group input[type="submit"]:hover {
+            background-color: #3e8e41;
+        }
+    </style>
 </head>
 <body>
-  <h2>📲 WhatsApp Auto Message Sender</h2>
+    <div class="container">
+        <div class="header">
+            <h1>WhatsApp Message Sender</h1>
+        </div>
+        <form id="message-form" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="receiver">Receiver's Phone Number:</label>
+                <input type="text" id="receiver" name="receiver" required>
+            </div>
+            <div class="form-group">
+                <label for="file">Select a file:</label>
+                <input type="file" id="file" name="file">
+            </div>
+            <div class="form-group">
+                <label for="delay">Delay (in seconds):</label>
+                <input type="number" id="delay" name="delay" value="2">
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Send Messages">
+            </div>
+        </form>
+    </div>
 
-  <form id="pairForm">
-    <input type="tel" id="phone" placeholder="Enter phone (e.g., 91xxxxxxxxxx)" required />
-    <button type="submit">Get Pairing Code</button>
-    <div id="codeResult" class="code-box"></div>
-  </form>
-
-  <form id="sendForm" style="margin-top: 20px;">
-    <input type="text" id="receiver" placeholder="Receiver Number (e.g., 91xxxxxxxxxx)" required />
-    <textarea id="message" placeholder="Type your message" rows="4" required></textarea>
-    <input type="number" id="delay" placeholder="Delay between messages (sec)" min="1" />
-    <button type="submit">Send Message</button>
-    <div id="sendResult" class="code-box"></div>
-  </form>
-
-  <script>
-    const pairForm = document.getElementById('pairForm');
-    const sendForm = document.getElementById('sendForm');
-
-    pairForm.onsubmit = async (e) => {
-      e.preventDefault();
-      const phone = document.getElementById('phone').value;
-      const res = await fetch(`/api?phone=${phone}`);
-      const data = await res.json();
-      document.getElementById('codeResult').innerText = data.code || data.message || data.error;
-    };
-
-    sendForm.onsubmit = async (e) => {
-      e.preventDefault();
-      const formData = new FormData();
-      formData.append('receiver', document.getElementById('receiver').value);
-      formData.append('message', document.getElementById('message').value);
-      formData.append('delay', document.getElementById('delay').value || '2');
-
-      const res = await fetch('/api', {
-        method: 'POST',
-        body: formData
-      });
-
-      const data = await res.json();
-      document.getElementById('sendResult').innerText = data.message || data.error;
-    };
-  </script>
+    <script>
+        const form = document.getElementById('message-form');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            try {
+                const response = await fetch('/api', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                console.log(data);
+            } catch (err) {
+                console.error(err);
+            }
+        });
+    </script>
 </body>
   </html>
   
