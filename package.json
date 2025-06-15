@@ -1,13 +1,15 @@
 {
-  "name": "whatsapp-auto-pair",
+  "name": "whatsapp-auto-sender",
   "version": "1.0.0",
+  "description": "WhatsApp Auto Message Sender using Baileys and Express",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node app.js",
+    "build": "echo 'No build step needed'"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.18",
-    "express": "^4.18.2",
+    "express": "^4.18.4",
     "formidable": "^2.1.1"
   }
 }
