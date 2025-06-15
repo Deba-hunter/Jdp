@@ -28,7 +28,7 @@
             display: block;
             margin-bottom: 10px;
         }
-        .form-group input[type="text"], .form-group input[type="file"] {
+        .form-group input[type="text"], .form-group input[type="file"], .form-group textarea {
             width: 100%;
             padding: 10px;
             border: 1px solid #ccc;
@@ -73,6 +73,7 @@
                 <input type="submit" value="Send Message">
             </div>
         </form>
+        <div id="result"></div>
     </div>
 
     <script>
@@ -86,12 +87,13 @@
                     body: formData
                 });
                 const data = await response.json();
-                console.log(data);
+                document.getElementById('result').innerHTML = data.message;
             } catch (err) {
                 console.error(err);
+                document.getElementById('result').innerHTML = 'Error: ' + err.message;
             }
         });
     </script>
 </body>
-  </html>
-  
+                </html>
+                
