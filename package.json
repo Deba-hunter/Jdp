@@ -1,13 +1,13 @@
 {
-  "name": "whatsapp-bot-render",
+  "name": "whatsapp-pair-bot",
   "version": "1.0.0",
-  "main": "app.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node app.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.18",
     "express": "^4.19.2",
-    "formidable": "^2.1.1"
+    "formidable": "^3.5.3"
   }
 }
