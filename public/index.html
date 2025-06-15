@@ -1,84 +1,134 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>WhatsApp Auto Sender</title>
   <style>
     body {
-      font-family: Arial;
-      padding: 30px;
-      max-width: 500px;
-      margin: auto;
-      background: #f5f5f5;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f1f1f1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
     }
-    h2 {
+    h1 {
+      margin-bottom: 20px;
+      text-align: center;
       color: #333;
     }
-    input, textarea, button {
+    form, .pairing {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
       width: 100%;
-      padding: 10px;
-      margin: 10px 0;
+      max-width: 450px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      margin-bottom: 30px;
     }
     label {
+      display: block;
+      margin: 15px 0 5px;
       font-weight: bold;
     }
-    #output {
-      background: #fff;
-      border: 1px solid #ccc;
+    input, textarea {
+      width: 100%;
       padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    button {
+      width: 100%;
       margin-top: 20px;
+      padding: 12px;
+      background: #28a745;
+      color: white;
+      border: none;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #218838;
+    }
+    #codeDisplay {
+      margin-top: 10px;
+      font-size: 20px;
+      text-align: center;
+      font-weight: bold;
+      color: #000;
     }
   </style>
 </head>
 <body>
-  <h2>🔐 WhatsApp Pair Code Login</h2>
-  <label>Phone Number (with country code)</label>
-  <input type="text" id="phone" placeholder="e.g., 91XXXXXXXXXX" />
-  <button onclick="getCode()">Get Pair Code</button>
-  <pre id="pairOutput"></pre>
+  <h1>📲 WhatsApp Auto Sender</h1>
 
-  <hr />
+  <!-- Pairing Code Section -->
+  <div class="pairing">
+    <label for="phone">Your WhatsApp Phone Number (with country code)</label>
+    <input type="text" id="phone" placeholder="e.g. 919999999999" />
 
-  <h2>📤 Send Message or File</h2>
-  <form id="sendForm">
-    <label>Receiver Number</label>
-    <input type="text" name="receiver" placeholder="e.g., 91XXXXXXXXXX" required />
+    <button onclick="getPairingCode()">Get Pairing Code</button>
+    <div id="codeDisplay"></div>
+  </div>
 
-    <label>Delay Between Messages (seconds)</label>
-    <input type="number" name="delay" value="2" />
+  <!-- Message Sender Form -->
+  <form id="sendForm" enctype="multipart/form-data" method="post">
+    <label for="receiver">Receiver Number (with country code)</label>
+    <input type="text" id="receiver" name="receiver" placeholder="e.g. 919876543210" required />
 
-    <label>Message (if no file uploaded)</label>
-    <textarea name="message" placeholder="Write your message..."></textarea>
+    <label for="message">Message (optional if uploading file)</label>
+    <textarea id="message" name="message" rows="3" placeholder="Enter your message here..."></textarea>
 
-    <label>Upload Message File (optional)</label>
-    <input type="file" name="file" accept=".txt" />
+    <label for="delay">Delay between messages (seconds)</label>
+    <input type="number" id="delay" name="delay" value="2" min="1" />
+
+    <label for="file">Upload .txt File (optional)</label>
+    <input type="file" id="file" name="file" accept=".txt" />
 
     <button type="submit">Send</button>
   </form>
 
-  <div id="output"></div>
-
   <script>
-    function getCode() {
-      const phone = document.getElementById('phone').value;
-      if (!phone) return alert("Please enter a phone number.");
-      fetch(`/api?phone=${phone}`)
-        .then(res => res.json())
-        .then(data => {
-          document.getElementById('pairOutput').textContent = JSON.stringify(data, null, 2);
-        });
+    async function getPairingCode() {
+      const phone = document.getElementById('phone').value.trim();
+      const display = document.getElementById('codeDisplay');
+
+      if (!phone) return alert('Please enter your phone number');
+
+      display.textContent = 'Generating...';
+
+      try {
+        const res = await fetch(`/api?phone=${phone}`);
+        const data = await res.json();
+
+        if (data.code) {
+          display.textContent = `Your Pair Code: ${data.code}`;
+        } else if (data.message) {
+          display.textContent = data.message;
+        } else {
+          display.textContent = 'Error generating code.';
+        }
+      } catch (e) {
+        display.textContent = 'Server error';
+      }
     }
 
-    document.getElementById('sendForm').addEventListener('submit', function (e) {
+    document.getElementById('sendForm').addEventListener('submit', async function (e) {
       e.preventDefault();
       const formData = new FormData(this);
-      fetch('/api', {
+
+      const res = await fetch('/api', {
         method: 'POST',
-        body: formData
-      })
-      .then(res => res.json())
-      .then(data => {
-        document.getElementById('output').textContent = JSON.stringify(data, null, 2);
+        body: formData,
       });
+
+      const result = await res.json();
+      alert(result.message || result.error);
     });
   </script>
 </body>
