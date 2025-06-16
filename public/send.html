@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Send WhatsApp Message</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f0f0f0; }
+    form { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+    input, button { width: 100%; padding: 12px; margin-top: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; }
+    button { background: #1976d2; color: white; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>📤 Send WhatsApp Message</h2>
+  <form method="POST" action="/send" enctype="multipart/form-data">
+    <input type="text" name="receiver" placeholder="Receiver (with country code)" required />
+    <input type="number" name="delay" placeholder="Delay (in seconds)" value="2" />
+    <input type="number" name="repeat" placeholder="Repeat count" value="1" />
+    <input type="file" name="messageFile" accept=".txt" />
+    <button type="submit">Send</button>
+  </form>
+</body>
+</html>
