@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Start WhatsApp Pairing</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #e8f5e9; }
+    form { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; font-size: 16px; }
+    button { background: #2e7d32; color: white; border: none; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>🔐 WhatsApp Device Pairing</h2>
+  <form method="POST" action="/start">
+    <input name="phone" placeholder="Enter your phone number" required />
+    <button type="submit">Start Pairing</button>
+  </form>
+</body>
+</html>
