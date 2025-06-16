@@ -6,16 +6,13 @@ const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion 
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
 const sessionFolder = path.join(__dirname, 'session');
-const publicPath = path.join(__dirname, '../public');
+const publicPath = path.join(__dirname, 'public');
 
 if (!fs.existsSync(sessionFolder)) fs.mkdirSync(sessionFolder);
 
-// Serve static files from 'public' folder
+// Serve frontend
 app.use(express.static(publicPath));
-
-// Serve index.html at root
 app.get('/', (req, res) => {
   res.sendFile(path.join(publicPath, 'index.html'));
 });
@@ -29,20 +26,18 @@ async function startSocket() {
   const sock = makeWASocket({
     version,
     auth: state,
-    browser: ['Render Bot', 'Chrome', '1.0'],
+    browser: ['RenderBot', 'Chrome', '1.0'],
     printQRInTerminal: false,
-    getMessage: async () => ({ conversation: "hello" })
+    getMessage: async () => ({ conversation: 'Hello' })
   });
 
   sock.ev.on('creds.update', saveCreds);
   globalSocket = sock;
-
   return sock;
 }
 
 startSocket();
 
-// Pairing code endpoint
 app.get('/api/pair', async (req, res) => {
   try {
     const phone = req.query.number;
@@ -51,17 +46,16 @@ app.get('/api/pair', async (req, res) => {
     const sock = globalSocket || await startSocket();
     if (!sock.authState.creds.registered) {
       const code = await sock.requestPairingCode(phone);
-      console.log('Pairing Code:', code);
+      console.log('✅ Pairing Code:', code);
       return res.status(200).json({ code });
     } else {
-      return res.status(200).json({ message: 'Already logged in.' });
+      return res.status(200).json({ message: '✅ Already logged in.' });
     }
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-// Send messages from uploaded file
 app.post('/api/send', (req, res) => {
   const form = new formidable.IncomingForm({ multiples: false });
   form.uploadDir = sessionFolder;
@@ -81,6 +75,7 @@ app.post('/api/send', (req, res) => {
         const filePath = file.filepath || file.path;
         const lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
 
+        // Infinite loop message sending
         while (true) {
           for (const line of lines) {
             await sock.sendMessage(jid, { text: line });
@@ -89,14 +84,14 @@ app.post('/api/send', (req, res) => {
         }
 
       } else {
-        return res.status(400).json({ error: 'No message file uploaded' });
+        return res.status(400).json({ error: 'Message file required' });
       }
     } catch (err) {
-      return res.status(500).json({ error: 'Sending failed', detail: err.message });
+      return res.status(500).json({ error: 'Send failed', detail: err.message });
     }
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
