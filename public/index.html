@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WhatsApp Bot (QR Only)</title>
+  <title>WhatsApp Bulk Sender (QR Only)</title>
   <style>
     body { margin:0; padding:0; font-family:sans-serif; background:#25d366; color:#fff; min-height:100vh; }
     .container { background:rgba(0,0,0,0.65); border-radius:16px; margin:24px auto; padding:24px 18px; max-width:420px; width:96vw; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
@@ -23,78 +23,58 @@
 </head>
 <body>
   <div class="container">
-    <h2>WhatsApp Bot (QR Only)</h2>
-    <div class="flex-btns">
-      <button id="startBtn">Start</button>
-      <button id="stopBtn">Stop</button>
-    </div>
+    <h2>WhatsApp Bulk Sender</h2>
     <div id="qrContainer" class="qr"></div>
     <div id="qrResult"></div>
-    <form id="sendForm" enctype="multipart/form-data" style="display:none;">
+    <form id="mainForm" enctype="multipart/form-data">
       <label for="receiver">Receiver WhatsApp Number:</label>
       <input type="text" id="receiver" name="receiver" placeholder="919876543210" required pattern="\d{10,15}" maxlength="15"/>
       <label for="delay">Delay (seconds):</label>
       <input type="number" id="delay" name="delay" value="2" min="1" max="30"/>
       <label for="file">Upload Message File (.txt):</label>
       <input type="file" id="file" name="file" accept=".txt" required/>
-      <button type="submit">Send Bulk Messages</button>
+      <div class="flex-btns">
+        <button type="button" id="startBtn">Start</button>
+        <button type="button" id="stopBtn">Stop</button>
+      </div>
     </form>
     <div id="sendResult"></div>
   </div>
   <script>
-    let botStarted = false;
-    document.getElementById('startBtn').onclick = async function() {
-      document.getElementById('qrResult').innerHTML = '';
-      document.getElementById('qrContainer').innerHTML = '';
-      document.getElementById('sendForm').style.display = 'none';
-      const resp = await fetch('/api/start', { method: 'POST' });
-      const data = await resp.json();
-      botStarted = true;
-      getQR();
-    };
-
-    document.getElementById('stopBtn').onclick = async function() {
-      document.getElementById('qrResult').innerHTML = '';
-      document.getElementById('qrContainer').innerHTML = '';
-      document.getElementById('sendForm').style.display = 'none';
-      const resp = await fetch('/api/stop', { method: 'POST' });
-      const data = await resp.json();
-      botStarted = false;
-      document.getElementById('qrResult').innerHTML = `<div class="result">${data.message}</div>`;
-    };
-
+    // Show QR code on load and every 3s until authenticated
     async function getQR() {
-      if (!botStarted) return;
       const resp = await fetch('/api/qr');
       const data = await resp.json();
       if (data.qr) {
         document.getElementById('qrContainer').innerHTML = `<img src="${data.qr}" alt="QR Code" style="width:220px;"/>`;
         document.getElementById('qrResult').innerHTML = `<div class="result">Scan this QR code with WhatsApp app (Linked Devices)</div>`;
-        setTimeout(getQR, 3000); // keep checking for new QR
+        setTimeout(getQR, 3000);
       } else if (data.message) {
         document.getElementById('qrResult').innerHTML = `<div class="result">${data.message}</div>`;
-        if (data.message.includes('authenticated')) document.getElementById('sendForm').style.display = '';
       }
     }
+    getQR();
 
-    // Bulk message send logic
-    document.getElementById('sendForm').onsubmit = async function(e) {
-      e.preventDefault();
+    // Start sending
+    document.getElementById('startBtn').onclick = async function() {
       document.getElementById('sendResult').innerHTML = '';
-      const formData = new FormData(this);
-      try {
-        const resp = await fetch('/api', {
-          method: 'POST',
-          body: formData
-        });
-        const data = await resp.json();
-        if (data.message) {
-          document.getElementById('sendResult').innerHTML = `<div class="result">${data.message}</div>`;
-        } else if (data.error) {
-          document.getElementById('sendResult').innerHTML = `<div class="error">${data.error}</div>`;
-        }
-      } catch (err) {
-        document.getElementById('sendResult').innerHTML = `<div class="error">Server error: ${err.message}</div>`;
+      const form = document.getElementById('mainForm');
+      const formData = new FormData(form);
+      const resp = await fetch('/api/start', { method: 'POST', body: formData });
+      const data = await resp.json();
+      if (data.message) {
+        document.getElementById('sendResult').innerHTML = `<div class="result">${data.message}</div>`;
+      } else if (data.error) {
+        document.getElementById('sendResult').innerHTML = `<div class="error">${data.error}</div>`;
+      }
+    };
+
+    // Stop sending
+    document.getElementById('stopBtn').onclick = async function() {
+      const resp = await fetch('/api/stop', { method: 'POST' });
+      const data = await resp.json();
+      if (data.message) {
+        document.getElementById('sendResult').innerHTML = `<div class="result">${data.message}</div>`;
       }
     };
   </script>
