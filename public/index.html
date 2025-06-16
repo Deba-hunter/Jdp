@@ -1,131 +1,133 @@
-<!-- public/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>WhatsApp Auto Sender</title>
   <style>
     body {
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #f1f5f9;
       margin: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background: linear-gradient(to right, #0f2027, #203a43, #2c5364);
-      color: white;
+      padding: 1rem;
       display: flex;
       flex-direction: column;
       align-items: center;
+    }
+    h2 { margin-top: 0; }
+    .section {
+      background: #1e293b;
       padding: 1rem;
-    }
-
-    h1 {
-      margin-top: 1rem;
-      font-size: 1.8rem;
-      color: #00ffd0;
-    }
-
-    #qr {
-      margin: 1rem 0;
-      border: 3px dashed #00ffd0;
-      padding: 10px;
-      background: #fff;
-    }
-
-    form {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+      border-radius: 12px;
       width: 100%;
       max-width: 400px;
-      background: rgba(255, 255, 255, 0.1);
-      padding: 1rem;
-      border-radius: 15px;
-      box-shadow: 0 0 15px rgba(0, 255, 208, 0.2);
+      margin-bottom: 1rem;
     }
-
-    input[type="text"],
-    input[type="number"],
-    input[type="file"] {
-      padding: 10px;
-      border-radius: 8px;
+    input, button, label {
+      width: 100%;
+      padding: 0.6rem;
+      margin-top: 0.5rem;
       border: none;
-      outline: none;
+      border-radius: 8px;
       font-size: 1rem;
     }
-
     button {
-      padding: 12px;
-      font-size: 1rem;
-      border: none;
-      border-radius: 8px;
-      font-weight: bold;
+      background: #22c55e;
+      color: white;
       cursor: pointer;
     }
-
-    .start {
-      background: #00ffd0;
-      color: black;
+    button.stop {
+      background: #ef4444;
     }
-
-    .stop {
-      background: red;
-      color: white;
+    .hidden {
+      display: none;
     }
-
-    #message {
-      margin-top: 15px;
-      font-size: 1rem;
+    img {
+      max-width: 100%;
+      border-radius: 12px;
+      margin-top: 1rem;
+    }
+    #status {
       text-align: center;
+      margin: 1rem 0;
     }
   </style>
 </head>
 <body>
-  <h1>ðŸŸ¢ WhatsApp Auto Sender</h1>
+  <h2>📱 WhatsApp Auto Sender</h2>
 
-  <div id="qr">Loading QR...</div>
+  <div id="qr-section" class="section">
+    <p id="status">⏳ Checking login status...</p>
+    <img id="qr" class="hidden" alt="Scan QR to login" />
+  </div>
 
-  <form id="sendForm">
-    <input type="text" name="receiver" placeholder="Receiver Number (e.g. 919876543210)" required />
-    <input type="number" name="delay" placeholder="Delay (seconds)" required />
-    <input type="file" name="file" accept=".txt" required />
-    <button type="submit" class="start">Start</button>
-  </form>
+  <div id="form-section" class="section hidden">
+    <label>📞 Receiver Number (with country code)</label>
+    <input type="text" id="receiver" placeholder="e.g., 919876543210" />
 
-  <button class="stop" onclick="stopSending()">Stop</button>
+    <label>📁 Upload Message File (.txt)</label>
+    <input type="file" id="file" accept=".txt" />
 
-  <div id="message"></div>
+    <label>⏱️ Delay Between Messages (seconds)</label>
+    <input type="number" id="delay" value="5" min="1" />
+
+    <button id="startBtn">▶️ Start</button>
+    <button id="stopBtn" class="stop">🛑 Stop</button>
+  </div>
 
   <script>
-    async function loadQR() {
+    async function checkQR() {
       const res = await fetch('/api/qr');
       const data = await res.json();
-      const qrBox = document.getElementById('qr');
+      const qrImg = document.getElementById('qr');
+      const status = document.getElementById('status');
+
       if (data.qr) {
-        qrBox.innerHTML = `<img src="${data.qr}" width="200" />`;
+        qrImg.src = data.qr;
+        qrImg.classList.remove('hidden');
+        status.textContent = "📷 Scan the QR using WhatsApp > Link Device";
+        setTimeout(checkQR, 5000);
+      } else if (data.message.includes("authenticated")) {
+        document.getElementById('qr-section').classList.add('hidden');
+        document.getElementById('form-section').classList.remove('hidden');
       } else {
-        qrBox.innerText = data.message;
-        setTimeout(loadQR, 2000);
+        status.textContent = data.message;
+        setTimeout(checkQR, 3000);
       }
     }
 
-    loadQR();
+    checkQR();
 
-    document.getElementById('sendForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const form = e.target;
-      const formData = new FormData(form);
+    document.getElementById('startBtn').addEventListener('click', async () => {
+      const receiver = document.getElementById('receiver').value.trim();
+      const file = document.getElementById('file').files[0];
+      const delay = document.getElementById('delay').value;
+
+      if (!receiver || !file) {
+        alert("⚠️ Please enter receiver and upload a file.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('receiver', receiver);
+      formData.append('file', file);
+      formData.append('delay', delay);
+
       const res = await fetch('/api/start', {
         method: 'POST',
         body: formData
       });
+
       const data = await res.json();
-      document.getElementById('message').innerText = data.message || data.error;
+      alert(data.message || data.error);
     });
 
-    async function stopSending() {
+    document.getElementById('stopBtn').addEventListener('click', async () => {
       const res = await fetch('/api/stop', { method: 'POST' });
       const data = await res.json();
-      document.getElementById('message').innerText = data.message;
-    }
+      alert(data.message || data.error);
+    });
   </script>
 </body>
 </html>
