@@ -1,6 +1,7 @@
 {
-  "name": "whatsapp-render-bot",
+  "name": "whatsapp-auto",
   "version": "1.0.0",
+  "main": "app.js",
   "scripts": {
     "start": "node app.js"
   },
