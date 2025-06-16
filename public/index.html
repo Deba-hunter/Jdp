@@ -7,119 +7,90 @@
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
-      background-color: #e7f6f2;
-      padding: 20px;
+      background: #f5f5f5;
       margin: 0;
+      padding: 20px;
     }
     .container {
-      max-width: 400px;
+      max-width: 420px;
       margin: auto;
-      background: white;
+      background: #fff;
       padding: 20px;
-      border-radius: 16px;
-      box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+      border-radius: 14px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.1);
     }
     h2 {
       color: #075e54;
       text-align: center;
     }
     label {
-      margin-top: 12px;
       display: block;
+      margin-top: 10px;
       font-weight: bold;
     }
-    input[type="text"], input[type="file"], input[type="number"] {
+    input, button {
       width: 100%;
       padding: 10px;
       margin-top: 6px;
-      margin-bottom: 10px;
-      border-radius: 8px;
       border: 1px solid #ccc;
+      border-radius: 8px;
       font-size: 1rem;
     }
     button {
-      width: 100%;
-      padding: 12px;
-      background-color: #25d366;
+      background: #25D366;
       color: white;
       font-weight: bold;
-      border: none;
-      border-radius: 10px;
-      font-size: 1rem;
       cursor: pointer;
     }
     button:hover {
-      background-color: #1da851;
+      background: #1ebd5a;
     }
     #out {
-      margin-top: 10px;
-      font-size: 1rem;
-      color: #333;
       text-align: center;
-      word-break: break-word;
-    }
-    hr {
-      margin: 20px 0;
-      border: 0;
-      border-top: 1px solid #ddd;
+      margin-top: 10px;
+      font-weight: bold;
+      color: #333;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>📲 WhatsApp Login</h2>
-    <label for="num">Enter WhatsApp Number</label>
-    <input id="num" type="text" placeholder="e.g. 919012345678" />
-    <button onclick="pair()">Get Pairing Code</button>
-    <div id="out">Pairing code will appear here.</div>
+    <h2>Login with Number</h2>
+    <label>Enter WhatsApp Number</label>
+    <input id="num" type="text" placeholder="91XXXXXXXXXX" />
+    <button onclick="pair()">Generate Code</button>
+    <div id="out"></div>
 
-    <hr>
-
-    <h2>📤 Send Messages</h2>
+    <h2>Send Messages</h2>
     <form id="msgForm" enctype="multipart/form-data">
-      <label for="receiver">Receiver Number</label>
-      <input name="receiver" type="text" placeholder="e.g. 919876543210" required />
-
-      <label for="delay">Delay (in seconds)</label>
+      <label>Receiver Number</label>
+      <input name="receiver" type="text" placeholder="91XXXXXXXXXX" required />
+      <label>Delay (in seconds)</label>
       <input name="delay" type="number" placeholder="2" />
-
-      <label for="file">Message File (.txt)</label>
-      <input name="file" type="file" accept=".txt" required />
-
-      <button type="submit">Start Sending</button>
+      <label>Upload .txt Message File</label>
+      <input name="file" type="file" required />
+      <button type="submit">Send</button>
     </form>
   </div>
 
   <script>
     async function pair() {
       const num = document.getElementById("num").value.trim();
-      if (!num) return alert("⚠️ Enter a valid phone number!");
-
-      try {
-        const res = await fetch(`/api/pair?number=${num}`);
-        const data = await res.json();
-        document.getElementById("out").innerText = data.code
-          ? `🔑 Pairing Code: ${data.code}`
-          : (data.message || data.error);
-      } catch (err) {
-        document.getElementById("out").innerText = "❌ Error: " + err.message;
-      }
+      if (!num) return alert("Enter phone number");
+      const res = await fetch("/api/pair?number=" + num);
+      const data = await res.json();
+      document.getElementById("out").innerText = data.code || data.message || data.error;
     }
 
     document.getElementById("msgForm").onsubmit = async (e) => {
       e.preventDefault();
       const form = new FormData(e.target);
-
-      try {
-        const res = await fetch("/api/send", {
-          method: "POST",
-          body: form,
-        });
-        const data = await res.json();
-        alert(data.message || data.error);
-      } catch (err) {
-        alert("❌ Sending failed: " + err.message);
-      }
+      const res = await fetch("/api/send", {
+        method: "POST",
+        body: form
+      });
+      const data = await res.json();
+      alert(data.message || data.error);
     };
   </script>
 </body>
