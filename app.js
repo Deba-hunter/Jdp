@@ -10,7 +10,13 @@ const PORT = process.env.PORT || 3000;
 const sessionFolder = path.join(__dirname, 'session');
 
 app.use(express.json());
-app.use(express.static('public')); // Serve frontend
+app.use(express.static('public'));
+
+let globalSocket = null;
+let qrData = null;
+let isReady = false;
+let sending = false; // Sending flag for stop/start control
+let sendingPromise = null;
 
 // Helper: Clean session folder
 function cleanSession() {
@@ -19,11 +25,6 @@ function cleanSession() {
   }
   fs.mkdirSync(sessionFolder, { recursive: true });
 }
-
-// WhatsApp Socket State
-let globalSocket = null;
-let qrData = null;
-let isReady = false;
 
 // Start WhatsApp bot
 async function startSocket() {
@@ -68,30 +69,9 @@ async function startSocket() {
 
 // Stop WhatsApp bot
 async function stopSocket() {
-  if (globalSocket) {
-    await globalSocket.logout();
-    globalSocket = null;
-    isReady = false;
-    qrData = null;
-    cleanSession();
-    console.log('🛑 WhatsApp Disconnected!');
-  }
+  sending = false; // Stop sending messages
+  // Don't logout, just stop sending
 }
-
-// --- API ROUTES ---
-
-// Start bot
-app.post('/api/start', async (req, res) => {
-  cleanSession();
-  await startSocket();
-  res.json({ message: 'Bot started. Scan QR to login.' });
-});
-
-// Stop bot
-app.post('/api/stop', async (req, res) => {
-  await stopSocket();
-  res.json({ message: 'Bot stopped/disconnected.' });
-});
 
 // Get QR code
 app.get('/api/qr', async (req, res) => {
@@ -101,8 +81,9 @@ app.get('/api/qr', async (req, res) => {
   res.json({ qr: qrImage });
 });
 
-// Bulk message API (same as before)
-app.post('/api', (req, res) => {
+// Start bot (and send messages)
+app.post('/api/start', async (req, res) => {
+  // Use formidable to parse form-data
   const form = new formidable.IncomingForm({ multiples: false });
   form.uploadDir = sessionFolder;
 
@@ -116,36 +97,57 @@ app.post('/api', (req, res) => {
       return res.status(400).json({ error: 'Receiver WhatsApp number required in correct format (e.g. 919876543210)' });
     }
 
-    try {
-      const sock = globalSocket;
-      if (!sock || !isReady) return res.status(400).json({ error: 'WhatsApp not authenticated. Please login first.' });
-      const jid = receiver + '@s.whatsapp.net';
-
-      if (files.file) {
-        const file = Array.isArray(files.file) ? files.file[0] : files.file;
-        const filePath = file.filepath || file.path;
-        const lines = fs.readFileSync(filePath, 'utf-8').split('\n').map(line => line.trim()).filter(Boolean);
-
-        if (lines.length === 0) {
-          return res.status(400).json({ error: 'File is empty.' });
-        }
-
-        for (const line of lines) {
-          await sock.sendMessage(jid, { text: line });
-          await new Promise(resolve => setTimeout(resolve, delaySec * 1000));
-        }
-
-        return res.status(200).json({ message: `📁 ${lines.length} messages sent from file to ${receiver}` });
-
-      } else {
-        return res.status(400).json({ error: 'File upload required' });
-      }
-    } catch (err) {
-      return res.status(500).json({ error: 'Sending failed', detail: err.message });
+    if (!files.file) {
+      return res.status(400).json({ error: 'File upload required' });
     }
+
+    // Clean session and start socket if not ready
+    if (!globalSocket) {
+      cleanSession();
+      await startSocket();
+    }
+
+    // Wait for login
+    let waitCount = 0;
+    while (!isReady && waitCount < 60) {
+      await new Promise(r => setTimeout(r, 1000));
+      waitCount++;
+    }
+    if (!isReady) return res.status(400).json({ error: 'WhatsApp not authenticated. Please scan QR code.' });
+
+    // Read file
+    const file = Array.isArray(files.file) ? files.file[0] : files.file;
+    const filePath = file.filepath || file.path;
+    const lines = fs.readFileSync(filePath, 'utf-8').split('\n').map(line => line.trim()).filter(Boolean);
+
+    if (lines.length === 0) {
+      return res.status(400).json({ error: 'File is empty.' });
+    }
+
+    // Start sending
+    sending = true;
+    const jid = receiver + '@s.whatsapp.net';
+
+    sendingPromise = (async () => {
+      for (const line of lines) {
+        if (!sending) break;
+        await globalSocket.sendMessage(jid, { text: line });
+        await new Promise(resolve => setTimeout(resolve, delaySec * 1000));
+      }
+      sending = false;
+    })();
+
+    res.status(200).json({ message: `Sending started to ${receiver} (${lines.length} messages). Use Stop to halt.` });
   });
+});
+
+// Stop sending messages
+app.post('/api/stop', async (req, res) => {
+  sending = false;
+  res.json({ message: 'Sending stopped.' });
 });
 
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
+  
