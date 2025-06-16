@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WhatsApp Baileys Bot</title>
+  <title>WhatsApp Bot (QR Only)</title>
   <style>
     body { margin:0; padding:0; font-family:sans-serif; background:#25d366; color:#fff; min-height:100vh; }
     .container { background:rgba(0,0,0,0.65); border-radius:16px; margin:24px auto; padding:24px 18px; max-width:420px; width:96vw; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
@@ -16,22 +16,20 @@
     .result { background:#113e2e; color:#b1ffce; }
     .error { background:#ff4444; color:#fff; }
     .qr { display:flex; justify-content:center; align-items:center; margin:10px 0; }
+    .flex-btns { display:flex; gap:10px; margin-bottom:10px; }
+    .flex-btns button { width:50%; }
     @media (max-width:480px) { .container { max-width:98vw; padding:14px 6px; } }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>WhatsApp Baileys Bot</h2>
-    <button id="getQR">Get QR Code (Scan)</button>
+    <h2>WhatsApp Bot (QR Only)</h2>
+    <div class="flex-btns">
+      <button id="startBtn">Start</button>
+      <button id="stopBtn">Stop</button>
+    </div>
     <div id="qrContainer" class="qr"></div>
     <div id="qrResult"></div>
-    <hr>
-    <form id="pairForm">
-      <label for="number">WhatsApp Number (country code ke saath, bina + ke):</label>
-      <input type="text" id="number" name="number" placeholder="919876543210" required pattern="\d{10,15}" maxlength="15"/>
-      <button type="submit">Get Pairing Code</button>
-    </form>
-    <div id="pairResult"></div>
     <form id="sendForm" enctype="multipart/form-data" style="display:none;">
       <label for="receiver">Receiver WhatsApp Number:</label>
       <input type="text" id="receiver" name="receiver" placeholder="919876543210" required pattern="\d{10,15}" maxlength="15"/>
@@ -44,50 +42,40 @@
     <div id="sendResult"></div>
   </div>
   <script>
-    // QR code logic
-    document.getElementById('getQR').onclick = async function() {
+    let botStarted = false;
+    document.getElementById('startBtn').onclick = async function() {
       document.getElementById('qrResult').innerHTML = '';
       document.getElementById('qrContainer').innerHTML = '';
       document.getElementById('sendForm').style.display = 'none';
+      const resp = await fetch('/api/start', { method: 'POST' });
+      const data = await resp.json();
+      botStarted = true;
+      getQR();
+    };
+
+    document.getElementById('stopBtn').onclick = async function() {
+      document.getElementById('qrResult').innerHTML = '';
+      document.getElementById('qrContainer').innerHTML = '';
+      document.getElementById('sendForm').style.display = 'none';
+      const resp = await fetch('/api/stop', { method: 'POST' });
+      const data = await resp.json();
+      botStarted = false;
+      document.getElementById('qrResult').innerHTML = `<div class="result">${data.message}</div>`;
+    };
+
+    async function getQR() {
+      if (!botStarted) return;
       const resp = await fetch('/api/qr');
       const data = await resp.json();
       if (data.qr) {
         document.getElementById('qrContainer').innerHTML = `<img src="${data.qr}" alt="QR Code" style="width:220px;"/>`;
         document.getElementById('qrResult').innerHTML = `<div class="result">Scan this QR code with WhatsApp app (Linked Devices)</div>`;
+        setTimeout(getQR, 3000); // keep checking for new QR
       } else if (data.message) {
         document.getElementById('qrResult').innerHTML = `<div class="result">${data.message}</div>`;
         if (data.message.includes('authenticated')) document.getElementById('sendForm').style.display = '';
       }
-    };
-
-    // Pairing code logic
-    document.getElementById('pairForm').onsubmit = async function(e) {
-      e.preventDefault();
-      const number = document.getElementById('number').value.trim();
-      document.getElementById('pairResult').innerHTML = '';
-      document.getElementById('sendResult').innerHTML = '';
-      try {
-        const resp = await fetch('/api/pair', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ number })
-        });
-        const data = await resp.json();
-        if (data.code) {
-          document.getElementById('pairResult').innerHTML =
-            `<div class="result"><b>Pairing Code:</b> <span style="font-size:1.3em;letter-spacing:2px">${data.code}</span><br>
-            <small>${data.message}</small></div>`;
-          document.getElementById('sendForm').style.display = '';
-        } else if (data.message) {
-          document.getElementById('pairResult').innerHTML = `<div class="result">${data.message}</div>`;
-          document.getElementById('sendForm').style.display = '';
-        } else if (data.error) {
-          document.getElementById('pairResult').innerHTML = `<div class="error">${data.error}</div>`;
-        }
-      } catch (err) {
-        document.getElementById('pairResult').innerHTML = `<div class="error">Server error: ${err.message}</div>`;
-      }
-    };
+    }
 
     // Bulk message send logic
     document.getElementById('sendForm').onsubmit = async function(e) {
@@ -112,4 +100,3 @@
   </script>
 </body>
 </html>
-  
