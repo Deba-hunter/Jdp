@@ -3,89 +3,63 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WhatsApp Automation Bot</title>
+  <title>WhatsApp Baileys Bot</title>
   <style>
-    body {
-      margin: 0; padding: 0;
-      font-family: 'Segoe UI', Arial, sans-serif;
-      background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
-      min-height: 100vh;
-      color: #fff;
-      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-    }
-    .container {
-      background: rgba(0,0,0,0.6);
-      border-radius: 18px;
-      margin-top: 24px;
-      padding: 24px 18px;
-      width: 96vw; max-width: 420px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.18);
-      display: flex; flex-direction: column; gap: 18px;
-    }
-    h2 {
-      margin: 0 0 12px 0;
-      text-align: center;
-      font-weight: 600;
-      letter-spacing: 1px;
-    }
-    label { font-weight: 500; margin-bottom: 4px; }
-    input, button, select {
-      width: 100%; font-size: 1.1em;
-      padding: 10px; margin-bottom: 10px;
-      border-radius: 7px; border: none;
-      box-sizing: border-box;
-    }
-    input[type="file"] {
-      background: #fff; color: #333;
-    }
-    button {
-      background: #25d366;
-      color: #fff; font-weight: bold;
-      border: none; cursor: pointer;
-      transition: background 0.2s;
-    }
-    button:hover {
-      background: #128c7e;
-    }
-    .result, .error {
-      margin: 10px 0 0 0;
-      padding: 10px 12px;
-      border-radius: 7px;
-      font-size: 1em;
-    }
-    .result { background: #113e2e; color: #b1ffce; }
-    .error { background: #ff4444; color: #fff; }
-    @media (max-width: 480px) {
-      .container { max-width: 98vw; padding: 14px 6px; }
-      h2 { font-size: 1.3em; }
-    }
+    body { margin:0; padding:0; font-family:sans-serif; background:#25d366; color:#fff; min-height:100vh; }
+    .container { background:rgba(0,0,0,0.65); border-radius:16px; margin:24px auto; padding:24px 18px; max-width:420px; width:96vw; box-shadow:0 4px 24px rgba(0,0,0,0.18); }
+    h2 { text-align:center; margin-bottom:16px; }
+    label { font-weight:500; }
+    input, button { width:100%; font-size:1.1em; padding:10px; margin-bottom:10px; border-radius:7px; border:none; }
+    button { background:#25d366; color:#fff; font-weight:bold; cursor:pointer; }
+    button:hover { background:#128c7e; }
+    .result, .error { margin-top:10px; padding:10px 12px; border-radius:7px; font-size:1em; }
+    .result { background:#113e2e; color:#b1ffce; }
+    .error { background:#ff4444; color:#fff; }
+    .qr { display:flex; justify-content:center; align-items:center; margin:10px 0; }
+    @media (max-width:480px) { .container { max-width:98vw; padding:14px 6px; } }
   </style>
 </head>
 <body>
   <div class="container">
-    <h2>WhatsApp Automation Bot</h2>
-    <!-- Pairing code section -->
+    <h2>WhatsApp Baileys Bot</h2>
+    <button id="getQR">Get QR Code (Scan)</button>
+    <div id="qrContainer" class="qr"></div>
+    <div id="qrResult"></div>
+    <hr>
     <form id="pairForm">
       <label for="number">WhatsApp Number (country code ke saath, bina + ke):</label>
       <input type="text" id="number" name="number" placeholder="919876543210" required pattern="\d{10,15}" maxlength="15"/>
       <button type="submit">Get Pairing Code</button>
     </form>
     <div id="pairResult"></div>
-
-    <!-- File upload section -->
     <form id="sendForm" enctype="multipart/form-data" style="display:none;">
       <label for="receiver">Receiver WhatsApp Number:</label>
       <input type="text" id="receiver" name="receiver" placeholder="919876543210" required pattern="\d{10,15}" maxlength="15"/>
       <label for="delay">Delay (seconds):</label>
       <input type="number" id="delay" name="delay" value="2" min="1" max="30"/>
-      <label for="file">Upload Message File (one line = one message):</label>
+      <label for="file">Upload Message File (.txt):</label>
       <input type="file" id="file" name="file" accept=".txt" required/>
       <button type="submit">Send Bulk Messages</button>
     </form>
     <div id="sendResult"></div>
   </div>
-
   <script>
+    // QR code logic
+    document.getElementById('getQR').onclick = async function() {
+      document.getElementById('qrResult').innerHTML = '';
+      document.getElementById('qrContainer').innerHTML = '';
+      document.getElementById('sendForm').style.display = 'none';
+      const resp = await fetch('/api/qr');
+      const data = await resp.json();
+      if (data.qr) {
+        document.getElementById('qrContainer').innerHTML = `<img src="${data.qr}" alt="QR Code" style="width:220px;"/>`;
+        document.getElementById('qrResult').innerHTML = `<div class="result">Scan this QR code with WhatsApp app (Linked Devices)</div>`;
+      } else if (data.message) {
+        document.getElementById('qrResult').innerHTML = `<div class="result">${data.message}</div>`;
+        if (data.message.includes('authenticated')) document.getElementById('sendForm').style.display = '';
+      }
+    };
+
     // Pairing code logic
     document.getElementById('pairForm').onsubmit = async function(e) {
       e.preventDefault();
@@ -137,5 +111,5 @@
     };
   </script>
 </body>
-  </html>
+</html>
   
