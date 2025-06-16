@@ -1,20 +1,141 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Start WhatsApp Pairing</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WhatsApp Automation Bot</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #e8f5e9; }
-    form { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
-    input, button { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; font-size: 16px; }
-    button { background: #2e7d32; color: white; border: none; font-weight: bold; }
+    body {
+      margin: 0; padding: 0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+      min-height: 100vh;
+      color: #fff;
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    }
+    .container {
+      background: rgba(0,0,0,0.6);
+      border-radius: 18px;
+      margin-top: 24px;
+      padding: 24px 18px;
+      width: 96vw; max-width: 420px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+      display: flex; flex-direction: column; gap: 18px;
+    }
+    h2 {
+      margin: 0 0 12px 0;
+      text-align: center;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+    label { font-weight: 500; margin-bottom: 4px; }
+    input, button, select {
+      width: 100%; font-size: 1.1em;
+      padding: 10px; margin-bottom: 10px;
+      border-radius: 7px; border: none;
+      box-sizing: border-box;
+    }
+    input[type="file"] {
+      background: #fff; color: #333;
+    }
+    button {
+      background: #25d366;
+      color: #fff; font-weight: bold;
+      border: none; cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #128c7e;
+    }
+    .result, .error {
+      margin: 10px 0 0 0;
+      padding: 10px 12px;
+      border-radius: 7px;
+      font-size: 1em;
+    }
+    .result { background: #113e2e; color: #b1ffce; }
+    .error { background: #ff4444; color: #fff; }
+    @media (max-width: 480px) {
+      .container { max-width: 98vw; padding: 14px 6px; }
+      h2 { font-size: 1.3em; }
+    }
   </style>
 </head>
 <body>
-  <h2>🔐 WhatsApp Device Pairing</h2>
-  <form method="POST" action="/start">
-    <input name="phone" placeholder="Enter your phone number" required />
-    <button type="submit">Start Pairing</button>
-  </form>
+  <div class="container">
+    <h2>WhatsApp Automation Bot</h2>
+    <!-- Pairing code section -->
+    <form id="pairForm">
+      <label for="number">WhatsApp Number (country code ke saath, bina + ke):</label>
+      <input type="text" id="number" name="number" placeholder="919876543210" required pattern="\d{10,15}" maxlength="15"/>
+      <button type="submit">Get Pairing Code</button>
+    </form>
+    <div id="pairResult"></div>
+
+    <!-- File upload section -->
+    <form id="sendForm" enctype="multipart/form-data" style="display:none;">
+      <label for="receiver">Receiver WhatsApp Number:</label>
+      <input type="text" id="receiver" name="receiver" placeholder="919876543210" required pattern="\d{10,15}" maxlength="15"/>
+      <label for="delay">Delay (seconds):</label>
+      <input type="number" id="delay" name="delay" value="2" min="1" max="30"/>
+      <label for="file">Upload Message File (one line = one message):</label>
+      <input type="file" id="file" name="file" accept=".txt" required/>
+      <button type="submit">Send Bulk Messages</button>
+    </form>
+    <div id="sendResult"></div>
+  </div>
+
+  <script>
+    // Pairing code logic
+    document.getElementById('pairForm').onsubmit = async function(e) {
+      e.preventDefault();
+      const number = document.getElementById('number').value.trim();
+      document.getElementById('pairResult').innerHTML = '';
+      document.getElementById('sendResult').innerHTML = '';
+      try {
+        const resp = await fetch('/api/pair', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ number })
+        });
+        const data = await resp.json();
+        if (data.code) {
+          document.getElementById('pairResult').innerHTML =
+            `<div class="result"><b>Pairing Code:</b> <span style="font-size:1.3em;letter-spacing:2px">${data.code}</span><br>
+            <small>${data.message}</small></div>`;
+          document.getElementById('sendForm').style.display = '';
+        } else if (data.message) {
+          document.getElementById('pairResult').innerHTML = `<div class="result">${data.message}</div>`;
+          document.getElementById('sendForm').style.display = '';
+        } else if (data.error) {
+          document.getElementById('pairResult').innerHTML = `<div class="error">${data.error}</div>`;
+        }
+      } catch (err) {
+        document.getElementById('pairResult').innerHTML = `<div class="error">Server error: ${err.message}</div>`;
+      }
+    };
+
+    // Bulk message send logic
+    document.getElementById('sendForm').onsubmit = async function(e) {
+      e.preventDefault();
+      document.getElementById('sendResult').innerHTML = '';
+      const formData = new FormData(this);
+      try {
+        const resp = await fetch('/api', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await resp.json();
+        if (data.message) {
+          document.getElementById('sendResult').innerHTML = `<div class="result">${data.message}</div>`;
+        } else if (data.error) {
+          document.getElementById('sendResult').innerHTML = `<div class="error">${data.error}</div>`;
+        }
+      } catch (err) {
+        document.getElementById('sendResult').innerHTML = `<div class="error">Server error: ${err.message}</div>`;
+      }
+    };
+  </script>
 </body>
-</html>
+  </html>
+  
