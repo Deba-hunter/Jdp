@@ -1,0 +1,6 @@
+session/
+.wwebjs_auth/
+.env
+node_modules
+.DS_Store, Thumbs.db
+npm-debug.log*
