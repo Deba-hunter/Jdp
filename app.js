@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const formidable = require('formidable');
 const qrcode = require('qrcode');
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require('@whiskeysockets/baileys');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,13 +20,15 @@ function cleanSession() {
   fs.mkdirSync(sessionFolder, { recursive: true });
 }
 
-// WhatsApp Socket
-let globalSocket;
+// WhatsApp Socket State
+let globalSocket = null;
 let qrData = null;
-let pairingCode = null;
 let isReady = false;
 
+// Start WhatsApp bot
 async function startSocket() {
+  if (globalSocket) return; // Already running
+
   const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
   const { version } = await fetchLatestBaileysVersion();
 
@@ -34,39 +36,64 @@ async function startSocket() {
     version,
     auth: state,
     printQRInTerminal: false,
-    browser: ['Render Bot', 'Chrome', '1.0'],
+    browser: ['Bot', 'Chrome', '1.0'],
     getMessage: async () => ({ conversation: "hello" })
   });
 
   sock.ev.on('creds.update', saveCreds);
 
   sock.ev.on('connection.update', async (update) => {
-    const { qr, connection } = update;
+    const { qr, connection, lastDisconnect } = update;
     if (qr) {
       qrData = qr;
+      isReady = false;
     }
     if (connection === 'open') {
       isReady = true;
       qrData = null;
-      pairingCode = null;
       console.log('✅ WhatsApp Connected!');
     }
     if (connection === 'close') {
       isReady = false;
       qrData = null;
-      pairingCode = null;
-      setTimeout(startSocket, 3000);
+      globalSocket = null;
+      if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
+        setTimeout(startSocket, 3000); // Auto-reconnect except on loggedOut
+      }
     }
   });
 
   globalSocket = sock;
-  return sock;
 }
 
-// Start socket on server start
-startSocket();
+// Stop WhatsApp bot
+async function stopSocket() {
+  if (globalSocket) {
+    await globalSocket.logout();
+    globalSocket = null;
+    isReady = false;
+    qrData = null;
+    cleanSession();
+    console.log('🛑 WhatsApp Disconnected!');
+  }
+}
 
-// Route: Get QR code (for scan login)
+// --- API ROUTES ---
+
+// Start bot
+app.post('/api/start', async (req, res) => {
+  cleanSession();
+  await startSocket();
+  res.json({ message: 'Bot started. Scan QR to login.' });
+});
+
+// Stop bot
+app.post('/api/stop', async (req, res) => {
+  await stopSocket();
+  res.json({ message: 'Bot stopped/disconnected.' });
+});
+
+// Get QR code
 app.get('/api/qr', async (req, res) => {
   if (isReady) return res.json({ message: 'Already authenticated!' });
   if (!qrData) return res.json({ message: 'QR code not generated yet. Please wait...' });
@@ -74,28 +101,7 @@ app.get('/api/qr', async (req, res) => {
   res.json({ qr: qrImage });
 });
 
-// Route: Get Pairing Code (for number login)
-app.post('/api/pair', async (req, res) => {
-  const { number } = req.body;
-  if (!number || !/^\d{10,15}$/.test(number)) {
-    return res.status(400).json({ error: 'WhatsApp number required in correct format (e.g. 919876543210)' });
-  }
-  try {
-    cleanSession();
-    const sock = await startSocket();
-    if (!sock.authState.creds.registered) {
-      const code = await sock.requestPairingCode(number);
-      pairingCode = code;
-      return res.status(200).json({ code, message: 'Enter this code in WhatsApp app > Linked Devices > Link with phone number instead.' });
-    } else {
-      return res.status(200).json({ message: '✅ Already logged in.' });
-    }
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-// Route: Send bulk messages from file
+// Bulk message API (same as before)
 app.post('/api', (req, res) => {
   const form = new formidable.IncomingForm({ multiples: false });
   form.uploadDir = sessionFolder;
@@ -143,4 +149,3 @@ app.post('/api', (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
 });
-    
