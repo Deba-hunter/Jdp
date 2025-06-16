@@ -16,8 +16,6 @@
     .result { background:#113e2e; color:#b1ffce; }
     .error { background:#ff4444; color:#fff; }
     .qr { display:flex; justify-content:center; align-items:center; margin:10px 0; }
-    .flex-btns { display:flex; gap:10px; margin-bottom:10px; }
-    .flex-btns button { width:50%; }
     @media (max-width:480px) { .container { max-width:98vw; padding:14px 6px; } }
   </style>
 </head>
@@ -33,15 +31,12 @@
       <input type="number" id="delay" name="delay" value="2" min="1" max="30"/>
       <label for="file">Upload Message File (.txt):</label>
       <input type="file" id="file" name="file" accept=".txt" required/>
-      <div class="flex-btns">
-        <button type="button" id="startBtn">Start</button>
-        <button type="button" id="stopBtn">Stop</button>
-      </div>
+      <button type="submit" id="sendBtn">Send</button>
     </form>
     <div id="sendResult"></div>
   </div>
   <script>
-    // Show QR code on load and every 3s until authenticated
+    // QR code fetch & display
     async function getQR() {
       const resp = await fetch('/api/qr');
       const data = await resp.json();
@@ -51,30 +46,22 @@
         setTimeout(getQR, 3000);
       } else if (data.message) {
         document.getElementById('qrResult').innerHTML = `<div class="result">${data.message}</div>`;
+        document.getElementById('qrContainer').innerHTML = '';
       }
     }
     getQR();
 
-    // Start sending
-    document.getElementById('startBtn').onclick = async function() {
+    // Bulk message send
+    document.getElementById('mainForm').onsubmit = async function(e) {
+      e.preventDefault();
       document.getElementById('sendResult').innerHTML = '';
-      const form = document.getElementById('mainForm');
-      const formData = new FormData(form);
-      const resp = await fetch('/api/start', { method: 'POST', body: formData });
+      const formData = new FormData(this);
+      const resp = await fetch('/api', { method: 'POST', body: formData });
       const data = await resp.json();
       if (data.message) {
         document.getElementById('sendResult').innerHTML = `<div class="result">${data.message}</div>`;
       } else if (data.error) {
         document.getElementById('sendResult').innerHTML = `<div class="error">${data.error}</div>`;
-      }
-    };
-
-    // Stop sending
-    document.getElementById('stopBtn').onclick = async function() {
-      const resp = await fetch('/api/stop', { method: 'POST' });
-      const data = await resp.json();
-      if (data.message) {
-        document.getElementById('sendResult').innerHTML = `<div class="result">${data.message}</div>`;
       }
     };
   </script>
