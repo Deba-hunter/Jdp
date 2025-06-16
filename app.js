@@ -7,104 +7,56 @@ const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const sessionFolder = path.join(__dirname, 'session');
-
 if (!fs.existsSync(sessionFolder)) fs.mkdirSync(sessionFolder);
-app.use(express.static('public'));
 
-let globalSocket;
-let isLoggedIn = false;
+let sock, isLoggedIn = false;
 
-// Start or return current socket
-async function startSocket() {
+async function initSocket() {
   const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
   const { version } = await fetchLatestBaileysVersion();
-
-  const sock = makeWASocket({
-    version,
-    auth: state,
-    browser: ['Render Bot', 'Chrome', '1.0'],
-    printQRInTerminal: false,
-    getMessage: async () => ({ conversation: "hello" })
-  });
-
+  sock = makeWASocket({ version, auth: state, browser: ['RenderBot','Chrome','1.0'] });
   sock.ev.on('creds.update', saveCreds);
-  sock.ev.on('connection.update', ({ connection }) => {
-    if (connection === 'open') {
-      console.log('✅ Logged in successfully');
-      isLoggedIn = true;
-    }
+  sock.ev.on('connection.update', update => {
+    if (update.connection === 'open') { isLoggedIn = true; console.log('✅ Logged in'); }
+    if (update.connection === 'close') { isLoggedIn = false; console.log('❌ Disconnected'); }
   });
-
-  globalSocket = sock;
-  return sock;
 }
+initSocket();
 
-startSocket();
+app.use(express.static(path.join(__dirname, '../public')));
 
-// 👉 STEP 1: Submit number and get pairing code
 app.get('/api/pair', async (req, res) => {
   const number = req.query.number;
-  if (!number) return res.status(400).json({ error: 'Phone number is required' });
-
+  if (!number) return res.status(400).json({ error: 'Number required' });
+  if (isLoggedIn) return res.json({ message: '✅ Already logged in' });
   try {
-    const sock = globalSocket || await startSocket();
-
-    if (isLoggedIn || sock.authState.creds.registered) {
-      return res.status(200).json({ message: '✅ Already logged in' });
-    }
-
     const code = await sock.requestPairingCode(number);
-    console.log('🔢 Pairing Code for', number, ':', code);
-    return res.status(200).json({ code });
+    console.log('🔢 Pair code:', code);
+    return res.json({ code });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
 });
 
-// 👉 STEP 2: Upload message file and receiver
 app.post('/api/send', (req, res) => {
-  const form = new formidable.IncomingForm({ multiples: false });
+  const form = new formidable.IncomingForm();
   form.uploadDir = sessionFolder;
-
   form.parse(req, async (err, fields, files) => {
-    if (err) return res.status(500).json({ error: 'Form parse error' });
-
+    if (err) return res.status(500).json({ error: 'Parse error' });
     const { receiver, delay } = fields;
-    const delaySec = parseInt(delay) || 2;
-
-    if (!receiver || !files.file) {
-      return res.status(400).json({ error: 'Receiver number and file are required' });
-    }
-
-    try {
-      const sock = globalSocket || await startSocket();
-      const jid = receiver + '@s.whatsapp.net';
-
-      const file = Array.isArray(files.file) ? files.file[0] : files.file;
-      const filePath = file.filepath || file.path;
-      const lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
-
-      if (lines.length === 0) {
-        return res.status(400).json({ error: 'Message file is empty' });
-      }
-
-      (async function loopMessages() {
-        while (true) {
-          for (const line of lines) {
-            await sock.sendMessage(jid, { text: line });
-            await new Promise(resolve => setTimeout(resolve, delaySec * 1000));
-          }
+    if (!receiver || !files.file) return res.status(400).json({ error: 'Receiver + file required' });
+    const lines = fs.readFileSync(files.file.filepath, 'utf-8').split('\n').filter(Boolean);
+    if (!lines.length) return res.status(400).json({ error: 'Empty file' });
+    (async () => {
+      while (true) {
+        for (let l of lines) {
+          await sock.sendMessage(receiver + '@s.whatsapp.net', { text: l });
+          await new Promise(r => setTimeout(r, (parseInt(delay) || 2) * 1000));
         }
-      })();
-
-      return res.status(200).json({ message: `📨 Messages started looping to ${receiver}` });
-    } catch (err) {
-      return res.status(500).json({ error: err.message });
-    }
+      }
+    })();
+    return res.json({ message: `Loop started to ${receiver}` });
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
-});
-  
+app.listen(PORT, () => console.log(`🚀 Running on port ${PORT}`));
