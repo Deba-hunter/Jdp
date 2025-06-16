@@ -1,3 +1,4 @@
+// app.js
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -10,25 +11,18 @@ const PORT = process.env.PORT || 3000;
 const sessionFolder = path.join(__dirname, 'session');
 
 app.use(express.json());
-app.use(express.static('public')); // Serve frontend
+app.use(express.static('public')); // HTML frontend from /public
 
-// Helper: Clean session folder
-function cleanSession() {
-  if (fs.existsSync(sessionFolder)) {
-    fs.rmSync(sessionFolder, { recursive: true, force: true });
-  }
-  fs.mkdirSync(sessionFolder, { recursive: true });
-}
+if (!fs.existsSync(sessionFolder)) fs.mkdirSync(sessionFolder);
 
-// WhatsApp Socket State
 let globalSocket = null;
 let qrData = null;
 let isReady = false;
+let isLooping = false;
+let currentLoop = null;
 
-// Start WhatsApp bot (auto-start on server run)
 async function startSocket() {
-  if (globalSocket) return; // Already running
-
+  if (globalSocket) return;
   const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
   const { version } = await fetchLatestBaileysVersion();
 
@@ -58,7 +52,7 @@ async function startSocket() {
       qrData = null;
       globalSocket = null;
       if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
-        setTimeout(startSocket, 3000); // Auto-reconnect except on loggedOut
+        setTimeout(startSocket, 3000);
       }
     }
   });
@@ -66,63 +60,70 @@ async function startSocket() {
   globalSocket = sock;
 }
 
-startSocket(); // Auto-start on server launch
+startSocket();
 
-// --- API ROUTES ---
-
-// Get QR code
+// GET QR Code for login
 app.get('/api/qr', async (req, res) => {
-  if (isReady) return res.json({ message: 'Already authenticated!' });
-  if (!qrData) return res.json({ message: 'QR code not generated yet. Please wait...' });
+  if (isReady) return res.json({ message: '✅ Already authenticated!' });
+  if (!qrData) return res.json({ message: '⏳ QR code not ready yet.' });
   const qrImage = await qrcode.toDataURL(qrData);
   res.json({ qr: qrImage });
 });
 
-// Bulk message API
-app.post('/api', (req, res) => {
-  const form = new formidable.IncomingForm({ multiples: false });
-  form.uploadDir = sessionFolder;
-
+// START message sending
+app.post('/api/start', (req, res) => {
+  const form = new formidable.IncomingForm();
   form.parse(req, async (err, fields, files) => {
     if (err) return res.status(500).json({ error: 'Form parse error' });
 
     const { receiver, delay } = fields;
-    const delaySec = parseInt(delay) || 2;
+    const delaySec = parseInt(delay) || 2; // ✅ unlimited time allowed
+
 
     if (!receiver || !/^\d{10,15}$/.test(receiver)) {
-      return res.status(400).json({ error: 'Receiver WhatsApp number required in correct format (e.g. 919876543210)' });
+      return res.status(400).json({ error: '❌ Invalid WhatsApp number' });
     }
 
-    try {
-      const sock = globalSocket;
-      if (!sock || !isReady) return res.status(400).json({ error: 'WhatsApp not authenticated. Please login first.' });
-      const jid = receiver + '@s.whatsapp.net';
+    if (!files.file) return res.status(400).json({ error: '❌ File required' });
 
-      if (files.file) {
-        const file = Array.isArray(files.file) ? files.file[0] : files.file;
-        const filePath = file.filepath || file.path;
-        const lines = fs.readFileSync(filePath, 'utf-8').split('\n').map(line => line.trim()).filter(Boolean);
+    const sock = globalSocket;
+    if (!sock || !isReady) return res.status(400).json({ error: '❌ WhatsApp not connected' });
 
-        if (lines.length === 0) {
-          return res.status(400).json({ error: 'File is empty.' });
-        }
+    const jid = receiver + '@s.whatsapp.net';
+    const file = Array.isArray(files.file) ? files.file[0] : files.file;
+    const filePath = file.filepath || file.path;
+    const lines = fs.readFileSync(filePath, 'utf-8')
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean);
 
+    if (lines.length === 0) return res.status(400).json({ error: '❌ File is empty.' });
+
+    isLooping = true;
+
+    const sendMessages = async () => {
+      while (isLooping) {
         for (const line of lines) {
+          if (!isLooping) break;
           await sock.sendMessage(jid, { text: line });
           await new Promise(resolve => setTimeout(resolve, delaySec * 1000));
         }
-
-        return res.status(200).json({ message: `📁 ${lines.length} messages sent from file to ${receiver}` });
-
-      } else {
-        return res.status(400).json({ error: 'File upload required' });
       }
-    } catch (err) {
-      return res.status(500).json({ error: 'Sending failed', detail: err.message });
-    }
+    };
+
+    currentLoop = sendMessages();
+    return res.json({ message: `✅ Started sending messages to ${receiver}` });
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
+// STOP message sending
+app.post('/api/stop', (req, res) => {
+  isLooping = false;
+  currentLoop = null;
+  res.json({ message: '🛑 Message sending stopped.' });
 });
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+  
