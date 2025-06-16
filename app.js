@@ -1,94 +1,86 @@
-// ✅ Complete WhatsApp Auto Sender with Pairing Code Login + File Upload + Delay
-
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const formidable = require('formidable');
-const {
-  default: makeWASocket,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion
-} = require('@whiskeysockets/baileys');
+const express = require("express");
+const fs = require("fs");
+const path = require("path");
+const formidable = require("formidable");
+const { makeWASocket, useMultiFileAuthState } = require("baileys");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const sessionFolder = path.join(__dirname, 'session');
-if (!fs.existsSync(sessionFolder)) fs.mkdirSync(sessionFolder);
+const sessionPath = path.join(__dirname, "session");
 
-app.use(express.static(path.join(__dirname, 'public')));
+if (!fs.existsSync(sessionPath)) fs.mkdirSync(sessionPath);
 
-let globalSock;
+let sock;
+let isLoggedIn = false;
 
-async function startSock() {
-  const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
-  const { version } = await fetchLatestBaileysVersion();
+// Serve static files
+app.use(express.static(path.join(__dirname, "public")));
 
-  const sock = makeWASocket({
-    version,
-    auth: state,
-    browser: ['WhatsAppBot', 'Chrome', '1.0'],
-    printQRInTerminal: false,
-    getMessage: async () => ({ conversation: "Hello" })
-  });
-
-  sock.ev.on('creds.update', saveCreds);
-  globalSock = sock;
-  return sock;
-}
-
-startSock();
-
-app.get('/pair', async (req, res) => {
-  const number = req.query.number;
-  if (!number) return res.status(400).json({ error: 'Missing number' });
-
-  try {
-    const sock = globalSock || await startSock();
-    const code = await sock.requestPairingCode(number);
-    console.log('✅ Pairing Code:', code);
-    return res.json({ code });
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
-  }
+// Show index.html (phone number form)
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-app.post('/send', (req, res) => {
-  const form = new formidable.IncomingForm({ multiples: false });
-  form.uploadDir = sessionFolder;
+// Handle phone number input and start session after 2 mins
+app.post("/start", express.urlencoded({ extended: true }), async (req, res) => {
+  const phone = req.body.phone;
+  console.log("📱 Phone received:", phone);
 
+  setTimeout(async () => {
+    const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+    sock = makeWASocket({
+      auth: state,
+      generateHighQualityLinkPreview: true,
+    });
+
+    sock.ev.on("creds.update", saveCreds);
+
+    sock.ev.on("connection.update", (update) => {
+      const { connection, pairingCode } = update;
+      if (pairingCode) console.log("🔗 Pairing Code:", pairingCode);
+      if (connection === "open") {
+        isLoggedIn = true;
+        console.log("✅ WhatsApp logged in!");
+      }
+    });
+
+    sock.ev.on("messages.upsert", () => {});
+  }, 2 * 60 * 1000); // 2 minutes
+
+  res.send("⏳ Please wait 2 minutes... Check terminal for code.");
+});
+
+// Show message sending UI after login
+app.get("/send", (req, res) => {
+  if (!isLoggedIn) return res.send("❌ Not logged in yet. Please complete pairing.");
+  res.sendFile(path.join(__dirname, "public/send.html"));
+});
+
+// Handle message send request
+app.post("/send", (req, res) => {
+  const form = formidable({ multiples: false });
   form.parse(req, async (err, fields, files) => {
-    if (err) return res.status(400).json({ error: 'Form parse failed' });
+    const { receiver, delay, repeat } = fields;
+    if (!receiver || !sock?.user) return res.status(400).send("Missing data or not logged in.");
 
-    const receiver = fields.receiver;
-    const delay = parseInt(fields.delay || '2');
-    if (!receiver) return res.status(400).json({ error: 'Receiver missing' });
-
-    try {
-      const sock = globalSock || await startSock();
-      const jid = receiver + '@s.whatsapp.net';
-
-      if (!files.file) return res.status(400).json({ error: 'No file uploaded' });
-
-      const file = files.file;
-      const filePath = file.filepath || file.path;
-      const lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
-
-      (async function sendLoop() {
-        while (true) {
-          for (const line of lines) {
-            await sock.sendMessage(jid, { text: line });
-            await new Promise(r => setTimeout(r, delay * 1000));
-          }
-        }
-      })();
-
-      res.json({ message: 'Messages are being sent in loop...' });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
+    let message = "Hello from WhatsApp Automation!";
+    if (files.messageFile && files.messageFile.filepath) {
+      message = fs.readFileSync(files.messageFile.filepath, "utf-8");
     }
+
+    const delayMs = Number(delay || 2) * 1000;
+    const repeatCount = Number(repeat || 1);
+
+    for (let i = 0; i < repeatCount; i++) {
+      await sock.sendMessage(receiver + "@s.whatsapp.net", { text: message });
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+
+    res.send("✅ Messages sent.");
   });
 });
 
 app.listen(PORT, () => {
-  console.log('✅ Server running on http://localhost:' + PORT);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
+         
