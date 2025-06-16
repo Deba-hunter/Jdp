@@ -1,64 +1,36 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
   <title>WhatsApp Pair & Send</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      font-family: sans-serif;
-      background: #eef2ff;
-      padding: 20px;
-      text-align: center;
-    }
-    input, button {
-      font-size: 1.1em;
-      padding: 10px;
-      width: 90%;
-      max-width: 350px;
-      margin: 10px auto;
-      display: block;
-    }
-    h2 {
-      color: #222;
-    }
-  </style>
+  <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>body{font-family:sans-serif;text-align:center;padding:20px;}input,button{margin:10px;width:90%;max-width:300px;padding:10px;font-size:1em;}</style>
 </head>
 <body>
-  <h2>🔐 Login to WhatsApp</h2>
-  <input id="number" placeholder="Enter WhatsApp number (e.g. 919078580674)" />
-  <button onclick="getPairingCode()">Get Pairing Code</button>
-
-  <p id="pairing"></p>
+  <h2>🔐 WhatsApp Pairing</h2>
+  <input id="num" placeholder="Number (e.g. 9190XXXX)" />
+  <button onclick="pair()">Get Pairing Code</button>
+  <p id="out"></p>
 
   <h2>📤 Send Messages</h2>
-  <form id="msgForm" enctype="multipart/form-data">
-    <input name="receiver" placeholder="Receiver number (e.g. 9190xxxxxx)" required />
-    <input name="delay" placeholder="Delay in seconds (e.g. 2)" />
+  <form id="f" enctype="multipart/form-data">
+    <input name="receiver" placeholder="Receiver number with country code" required />
+    <input name="delay" placeholder="Delay seconds" />
     <input type="file" name="file" accept=".txt" required />
-    <button type="submit">Start Sending</button>
+    <button type="submit">Start</button>
   </form>
-
-  <script>
-    async function getPairingCode() {
-      const number = document.getElementById("number").value.trim();
-      if (!number) return alert("Enter your WhatsApp number");
-
-      const res = await fetch('/api/pair?number=' + number);
-      const data = await res.json();
-      document.getElementById("pairing").innerText = data.code
-        ? `🟢 Pairing Code: ${data.code} (Enter in WhatsApp > Link Device > Use Code Instead)`
-        : (data.message || data.error);
-    }
-
-    const form = document.getElementById("msgForm");
-    form.onsubmit = async (e) => {
-      e.preventDefault();
-      const formData = new FormData(form);
-      const res = await fetch('/api/send', { method: 'POST', body: formData });
-      const data = await res.json();
-      alert(data.message || data.error);
-    };
-  </script>
+<script>
+  async function pair(){
+    let n = document.getElementById('num').value.trim();
+    if(!n) return alert('Enter number');
+    let res = await fetch('/api/pair?number='+n);
+    let d = await res.json();
+    document.getElementById('out').innerText = d.code ? `Code: ${d.code}` : (d.message||d.error);
+  }
+  document.getElementById('f').onsubmit = async e=>{
+    e.preventDefault();
+    let u = await fetch('/api/send',{method:'POST',body:new FormData(e.target)});
+    let r = await u.json(); alert(r.message||r.error);
+  };
+</script>
 </body>
 </html>
