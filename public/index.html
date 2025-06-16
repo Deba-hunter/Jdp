@@ -1,61 +1,88 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
-const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
-
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-const sessionFolder = path.join(__dirname, 'session');
-if (!fs.existsSync(sessionFolder)) fs.mkdirSync(sessionFolder);
-
-let globalSock = null;
-
-async function startSock() {
-  const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
-  const { version } = await fetchLatestBaileysVersion();
-
-  const sock = makeWASocket({
-    version,
-    auth: state,
-    printQRInTerminal: false,
-    browser: ['Chrome', 'Baileys', '1.0'],
-    getMessage: async () => ({ conversation: "hi" }),
-  });
-
-  sock.ev.on('creds.update', saveCreds);
-  globalSock = sock;
-  return sock;
-}
-
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
-
-app.get('/', (_, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/pair', async (req, res) => {
-  try {
-    const phone = req.query.number;
-    if (!phone) return res.status(400).json({ error: 'Phone number required' });
-
-    const sock = globalSock || await startSock();
-
-    if (!sock.authState.creds.registered) {
-      const code = await sock.requestPairingCode(phone);
-      console.log('✅ Pairing Code:', code);
-      return res.json({ code });
-    } else {
-      return res.json({ message: '✅ Already logged in.' });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WhatsApp Pairing</title>
+  <style>
+    * {
+      box-sizing: border-box;
     }
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f1f1f1;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+    }
+    h1 {
+      color: #075e54;
+      margin-bottom: 20px;
+    }
+    input {
+      padding: 12px;
+      font-size: 18px;
+      width: 80%;
+      max-width: 300px;
+      border: 2px solid #075e54;
+      border-radius: 8px;
+      outline: none;
+    }
+    button {
+      margin-top: 20px;
+      padding: 12px 24px;
+      background-color: #25d366;
+      color: white;
+      font-size: 18px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #1da955;
+    }
+    #result {
+      margin-top: 30px;
+      font-size: 20px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <h1>WhatsApp Login</h1>
+  <input type="text" id="number" placeholder="Enter WhatsApp number (e.g. 919xxxxxxxxx)" />
+  <button onclick="generateCode()">Generate Pairing Code</button>
+  <div id="result"></div>
 
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Pairing failed', detail: err.message });
-  }
-});
+  <script>
+    async function generateCode() {
+      const num = document.getElementById('number').value.trim();
+      if (!num) {
+        document.getElementById('result').innerText = "📵 Please enter a valid number.";
+        return;
+      }
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-});
+      document.getElementById('result').innerText = "⏳ Generating code...";
+      try {
+        const res = await fetch(`/pair?number=${num}`);
+        const data = await res.json();
+
+        if (data.code) {
+          document.getElementById('result').innerHTML = `✅ Your 8-digit pairing code: <b>${data.code}</b><br><small>Enter this code in WhatsApp > Link Device > Use Code Instead</small>`;
+        } else if (data.message) {
+          document.getElementById('result').innerText = data.message;
+        } else if (data.error) {
+          document.getElementById('result').innerText = `❌ ${data.error}`;
+        }
+      } catch (err) {
+        document.getElementById('result').innerText = "⚠️ Server error. Try again.";
+      }
+    }
+  </script>
+</body>
+</html>
