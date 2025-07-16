@@ -12,7 +12,7 @@ const {
 } = require('@whiskeysockets/baileys');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 const sessionFolder = path.join(__dirname, 'session');
 
 app.use(express.json());
@@ -36,7 +36,7 @@ async function startSocket() {
     version,
     auth: state,
     printQRInTerminal: false,
-    browser: ['Bot', 'Chrome', '1.0'],
+    browser: ['Aadi Server', 'Chrome', '1.0'],
     getMessage: async () => ({ conversation: "hello" })
   });
 
