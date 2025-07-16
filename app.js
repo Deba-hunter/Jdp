@@ -1,3 +1,4 @@
+// app.js
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
@@ -24,8 +25,8 @@ let qrData = null;
 let isReady = false;
 let isLooping = false;
 let currentLoop = null;
+let messageLogs = []; // ✅ Logs storage
 
-// Start WhatsApp Socket
 async function startSocket() {
   if (globalSocket) return;
   const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
@@ -35,7 +36,7 @@ async function startSocket() {
     version,
     auth: state,
     printQRInTerminal: false,
-    browser: ['Made By Aadi', 'Chrome', '1.0'],
+    browser: ['Bot', 'Chrome', '1.0'],
     getMessage: async () => ({ conversation: "hello" })
   });
 
@@ -67,7 +68,7 @@ async function startSocket() {
 
 startSocket();
 
-// Get QR Code
+// ✅ QR API
 app.get('/api/qr', async (req, res) => {
   if (isReady) return res.json({ message: '✅ Already authenticated!' });
   if (!qrData) return res.json({ message: '⏳ QR code not ready yet.' });
@@ -75,23 +76,28 @@ app.get('/api/qr', async (req, res) => {
   res.json({ qr: qrImage });
 });
 
-// Start Sending Messages
+// ✅ Start API
 app.post('/api/start', (req, res) => {
   const form = new formidable.IncomingForm();
   form.parse(req, async (err, fields, files) => {
     if (err) return res.status(500).json({ error: 'Form parse error' });
 
-    let receiver = Array.isArray(fields.receiver) ? fields.receiver[0] : fields.receiver;
-    let delay = parseInt(fields.delay) || 2;
-    let name = Array.isArray(fields.name) ? fields.name[0] : fields.name;
+    const receiver = (fields.receiver || "").toString().trim();
+    const name = (fields.name || "").toString().trim();
+    const delaySec = parseInt(fields.delay) || 2;
 
-    if (!receiver) return res.status(400).json({ error: '❌ Receiver is required' });
+    if (!receiver) {
+      return res.status(400).json({ error: '❌ Receiver required' });
+    }
 
-    const receivers = receiver.split(',').map(num => num.trim()).filter(num => /^\d{10,15}$/.test(num));
-    if (receivers.length === 0) return res.status(400).json({ error: '❌ Invalid phone numbers' });
-
-    name = typeof name === 'string' ? name.trim() : '';
-    if (!name) return res.status(400).json({ error: '❌ Name is required' });
+    let jid;
+    if (/^\d{10,15}$/.test(receiver)) {
+      jid = receiver + '@s.whatsapp.net';
+    } else if (receiver.endsWith('@g.us')) {
+      jid = receiver;
+    } else {
+      return res.status(400).json({ error: '❌ Invalid receiver. Use phone number or group ID.' });
+    }
 
     if (!files.file) return res.status(400).json({ error: '❌ File required' });
 
@@ -105,38 +111,49 @@ app.post('/api/start', (req, res) => {
       .map(line => line.trim())
       .filter(Boolean);
 
-    if (lines.length === 0) return res.status(400).json({ error: '❌ File is empty.' });
+    const personalizedLines = lines.map(line => `${name} ${line.replace(/{name}/gi, '')}`.trim());
+
+    if (personalizedLines.length === 0) {
+      return res.status(400).json({ error: '❌ File is empty.' });
+    }
 
     isLooping = true;
 
     const sendMessages = async () => {
       while (isLooping) {
-        for (const jidSuffix of receivers) {
-          const jid = jidSuffix + '@s.whatsapp.net';
-          for (const line of lines) {
-            if (!isLooping) break;
-            const finalMessage = `${name} ${line}`;
-            await sock.sendMessage(jid, { text: finalMessage });
-            await new Promise(resolve => setTimeout(resolve, delay * 1000));
+        for (const line of personalizedLines) {
+          if (!isLooping) break;
+          try {
+            await sock.sendMessage(jid, { text: line });
+            const timestamp = new Date().toLocaleTimeString();
+            messageLogs.push(`[${timestamp}] Sent to ${receiver}: ${line}`);
+          } catch (err) {
+            const timestamp = new Date().toLocaleTimeString();
+            messageLogs.push(`[${timestamp}] ❌ Failed: ${line}`);
           }
+          await new Promise(resolve => setTimeout(resolve, delaySec * 1000));
         }
       }
     };
 
     currentLoop = sendMessages();
-    return res.json({ message: `✅ Started sending messages to ${receivers.join(', ')}` });
+    return res.json({ message: `✅ Started sending messages to ${receiver}` });
   });
 });
 
-// Stop Sending
+// ✅ Stop API
 app.post('/api/stop', (req, res) => {
   isLooping = false;
   currentLoop = null;
+  messageLogs.push(`[${new Date().toLocaleTimeString()}] 🛑 Sending stopped`);
   res.json({ message: '🛑 Message sending stopped.' });
+});
+
+// ✅ Logs API
+app.get('/api/logs', (req, res) => {
+  res.json({ logs: messageLogs });
 });
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
-
-      
